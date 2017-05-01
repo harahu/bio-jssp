@@ -57,10 +57,21 @@ class Particle(object):
         return mutated
 
     def _inverse(self):
-        pass
+        mutated = self._coordinates[:]
+        swap_positions = random.sample(range(len(self._coordinates)), 2).sort()
+        p, q = swap_positions[0], swap_positions[1]
+        mutated = mutated[:p] + reversed(mutated[p:q+1]) + mutated[q+1:]
+        return mutated
 
     def _long(self):
-        pass
+        mutated = self._coordinates[:]
+        swap_positions = random.sample(range(len(self._coordinates)), 2).sort()
+        p, q = swap_positions[0], swap_positions[1]
+        segment = mutated[p:q+1]
+        del mutated[p:q+1]
+        r = random.sample(range(len(self._coordinates)), 1)
+        mutated = mutated[:r] + segment + mutated[r:]
+        return mutated
 
     def _mutate(self, prob_s, prob_i, prob_inv):
         q = random.random()
