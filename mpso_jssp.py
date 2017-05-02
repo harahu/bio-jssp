@@ -1,19 +1,14 @@
 import random, math, collections
 import numpy as np
+from jssp_io import read_mpso_problem
 
 Parameters = collections.namedtuple('Parameters',
-                                    ['max_iteration',
-                                     'pop_size',
-                                     'max_omega',
-                                     'min_omega',
+                                    ['max_iteration', 'pop_size',
+                                     'max_omega', 'min_omega',
                                      'prob_mie',
-                                     'prob_s',
-                                     'prob_i',
-                                     'prob_inv',
-                                     'tf',
-                                     'beta',
-                                     'c1',
-                                     'c2',
+                                     'tf', 'beta',
+                                     'prob_s', 'prob_i', 'prob_inv',
+                                     'c1', 'c2',
                                      'v_max'])
 
 
@@ -54,7 +49,7 @@ class Particle(object):
         self._velocity += alg_params.c2 * random.random() * (global_best - self._coordinates)
         # Truncate speed for each dimension to v_max
         for i in range(len(self._velocity)):
-            if abs(self._velocity[i]) >  alg_params.v_max:
+            if abs(self._velocity[i]) > alg_params.v_max:
                 if self._velocity[i] < 0:
                     self._velocity[i] = -alg_params.v_max
                 self._velocity[i] = alg_params.v_max
@@ -189,6 +184,7 @@ def mpso(jssp_problem, alg_params):
         if swarm_min.makespan < global_best_val:
             global_best = swarm_min.coordinates[:]
             global_best_val = swarm_min.makespan
+        print(global_best_val)
         # Update omega
         omega = alg_params.max_omega - i * (alg_params.max_omega - alg_params.min_omega) / alg_params.max_iteration
         # Move particles
@@ -198,9 +194,6 @@ def mpso(jssp_problem, alg_params):
     return min(swarm, key=lambda x: x.makespan).solution
 
 
-def read_mpso_problem(filename):
-    pass
-
 if __name__ == '__main__':
     problem_1 = read_mpso_problem('test_data/1.txt')
     algorithm_parameters = Parameters(max_iteration=300, pop_size=30,
@@ -209,6 +202,6 @@ if __name__ == '__main__':
                                       prob_i=0.4, prob_inv=0.1,
                                       tf=0.1, beta=0.97,
                                       c1=2, c2=2,
-                                      v_max=jssp_problem.n * jssp_problem.m * 0.1)
+                                      v_max=problem_1.n * problem_1.m * 0.1)
     solution = mpso(problem_1, algorithm_parameters)
 
