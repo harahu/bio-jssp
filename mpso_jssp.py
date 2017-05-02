@@ -1,6 +1,6 @@
 import random, math, collections
 import numpy as np
-from jssp_io import read_mpso_problem
+import jssp_io
 
 Parameters = collections.namedtuple('Parameters',
                                     ['max_iteration', 'pop_size',
@@ -14,14 +14,13 @@ Parameters = collections.namedtuple('Parameters',
 
 class Particle(object):
 
-    def __init__(self, jssp_problem):
+    def __init__(self, jssp_problem, coordinates):
         self._problem = jssp_problem
-        dim = jssp_problem.n * jssp_problem.m
-        self._coordinates = np.array(
-            [random.uniform(0, dim) for _ in range(dim)])
+        self._coordinates = coordinates
         self._velocity = np.array(
-            [random.random() for _ in range(dim)])
-        self._solution = Solution(jssp_problem, self._coordinates)
+            [random.random() for _ in range(len(coordinates))])
+        self._solution = Solution(jssp_problem, self._coordinates[:])
+        self._makespan = self._solution.makespan
         self._local_best = self._coordinates[:]
         self._local_best_val = self._solution.makespan
 
@@ -44,51 +43,55 @@ class Particle(object):
             self._local_best_val = self._solution.makespan
 
     def update_velocity(self, omega, global_best, alg_params):
-        self._velocity *= omega
-        self._velocity += alg_params.c1 * random.random() * (self._local_best - self._coordinates)
-        self._velocity += alg_params.c2 * random.random() * (global_best - self._coordinates)
-        # Truncate speed for each dimension to v_max
         for i in range(len(self._velocity)):
-            if abs(self._velocity[i]) > alg_params.v_max:
-                if self._velocity[i] < 0:
-                    self._velocity[i] = -alg_params.v_max
+            self._velocity[i] *= omega
+            self._velocity[i] += alg_params.c1 * random.random() * (self._local_best[i] - self._coordinates[i])
+            self._velocity[i] += alg_params.c2 * random.random() * (global_best[i] - self._coordinates[i])
+            # Truncate speed to v_max
+            if self._velocity[i] > alg_params.v_max:
                 self._velocity[i] = alg_params.v_max
+            elif self._velocity[i] < -alg_params.v_max:
+                self._velocity[i] = -alg_params.v_max
 
     def move(self):
         self._coordinates += self._velocity
         self._refresh()
 
     def _swap(self):
-        mutated = self._coordinates[:]
+        mutated = np.copy(self._coordinates)
         swap_positions = random.sample(range(len(self._coordinates)), 2)
         p, q = swap_positions[0], swap_positions[1]
         mutated[p], mutated[q] = mutated[q], mutated[p]
         return mutated
 
     def _insert(self):
-        mutated = self._coordinates[:]
+        mutated = np.copy(self._coordinates)
         swap_positions = random.sample(range(len(self._coordinates)), 2)
         p, q = swap_positions[0], swap_positions[1]
         element = mutated[p]
-        del mutated[p]
-        mutated.insert(q, element)
+        mutated = np.append(mutated[:p], mutated[p+1:])
+        mutated = np.insert(mutated, q, element)
         return mutated
 
     def _inverse(self):
-        mutated = self._coordinates[:]
-        swap_positions = random.sample(range(len(self._coordinates)), 2).sort()
+        mutated = np.copy(self._coordinates)
+        swap_positions = sorted(random.sample(range(len(self._coordinates)), 2))
         p, q = swap_positions[0], swap_positions[1]
-        mutated = mutated[:p] + reversed(mutated[p:q+1]) + mutated[q+1:]
+        segment = mutated[p:q+1]
+        segment = segment[::-1]
+        mutated = np.append(np.append(mutated[:p], segment), mutated[q+1:])
         return mutated
 
     def _long(self):
-        mutated = self._coordinates[:]
-        swap_positions = random.sample(range(len(self._coordinates)), 2).sort()
-        p, q = swap_positions[0], swap_positions[1]
+        mutated = np.copy(self._coordinates)
+        swap_positions = sorted(random.sample(range(len(self._coordinates)), 3))
+        if random.random() <= 0.5:
+            p, q, r = swap_positions[0], swap_positions[1], swap_positions[2]
+        else:
+            r, p, q = swap_positions[0], swap_positions[1], swap_positions[2]
         segment = mutated[p:q+1]
-        del mutated[p:q+1]
-        r = random.sample(range(len(self._coordinates)), 1)
-        mutated = mutated[:r] + segment + mutated[r:]
+        mutated = np.append(mutated[:p], mutated[q+1:])
+        mutated = np.append(np.append(mutated[:r], segment), mutated[r:])
         return mutated
 
     def _mutate(self, alg_params):
@@ -119,13 +122,17 @@ class Solution(object):
     def __init__(self, jssp_problem, coordinates):
         self.problem = jssp_problem
         int_series = sorted(range(len(coordinates)),
-                            key=lambda i: coordinates[i])
-        operations = [i % jssp_problem.n + 1 for i in int_series]
+                            key=lambda index: coordinates[index])
+        operations = [job % jssp_problem.n for job in int_series]
         self.schedule, self._makespan = self._schedule(operations)
 
     @property
     def makespan(self):
         return self._makespan
+
+    @property
+    def schedule(self):
+        return self._schedule()
 
     def _schedule(self, operations):
         job_operation_tracker = [0 for _ in range(self.problem.n)]
@@ -142,7 +149,7 @@ class Solution(object):
             end = start + time_rec
             schedule[machine].append((start, end))
             job_operation_tracker[op] += 1
-            job_end = end
+            job_end[op] = end
         makespan = max(job_end)
         return schedule, makespan
 
@@ -167,12 +174,17 @@ class Problem(object):
         return self._jobs
 
 
-def mpso(jssp_problem, alg_params):
+def mpso(jssp_problem, alg_params, particles):
     # Initialize swarm
-    swarm = [Particle(jssp_problem) for _ in range(alg_params.pop_size)]
+    swarm = particles
+    while len(swarm) < alg_params.pop_size:
+        dim = jssp_problem.n * jssp_problem.m
+        coordinates = np.array(
+            [random.uniform(0, dim) for _ in range(dim)])
+        swarm.append(Particle(jssp_problem, coordinates))
     # Initialize global best
-    swarm_min = min(swarm, key=lambda x: x.makespan)
-    global_best = swarm_min.coordinates[:]
+    swarm_min = min(swarm, key=lambda p: p.makespan)
+    global_best = np.copy(swarm_min.coordinates)
     global_best_val = swarm_min.makespan
     for i in range(alg_params.max_iteration):
         # Perform local search for particles
@@ -180,28 +192,36 @@ def mpso(jssp_problem, alg_params):
             if random.random() <= alg_params.prob_mie:
                 particle.enhance(alg_params, global_best_val)
         # Update global best
-        swarm_min = min(swarm, key=lambda x: x.makespan)
+        swarm_min = min(swarm, key=lambda p: p.makespan)
         if swarm_min.makespan < global_best_val:
-            global_best = swarm_min.coordinates[:]
+            global_best = np.copy(swarm_min.coordinates)
             global_best_val = swarm_min.makespan
-        print(global_best_val)
+            print(global_best_val)
         # Update omega
         omega = alg_params.max_omega - i * (alg_params.max_omega - alg_params.min_omega) / alg_params.max_iteration
         # Move particles
         for particle in swarm:
             particle.update_velocity(omega, global_best, alg_params)
             particle.move()
-    return min(swarm, key=lambda x: x.makespan).solution
+    return global_best
 
 
 if __name__ == '__main__':
-    problem_1 = read_mpso_problem('test_data/1.txt')
-    algorithm_parameters = Parameters(max_iteration=300, pop_size=30,
+    problem_1 = jssp_io.read_mpso_problem('test_data/5.txt')
+    algorithm_parameters = Parameters(max_iteration=500, pop_size=30,
                                       max_omega=1.4, min_omega=0.4,
                                       prob_mie=0.01, prob_s=0.4,
                                       prob_i=0.4, prob_inv=0.1,
-                                      tf=0.1, beta=0.97,
-                                      c1=2, c2=2,
+                                      tf=0.1, beta=0.97, c1=2, c2=2,
                                       v_max=problem_1.n * problem_1.m * 0.1)
-    solution = mpso(problem_1, algorithm_parameters)
-
+    particles_p = []
+    i = 0
+    while i < 10:
+        print('Round {}: ---------------'.format(i))
+        solution = mpso(problem_1, algorithm_parameters, particles_p)
+        particle_p = Particle(problem_1, solution)
+        particles_p = [particle_p]
+        i += 1
+        if i == 10:
+            print('Continue?')
+            i = int(input('I: '))
