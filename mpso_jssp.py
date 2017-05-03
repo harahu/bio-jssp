@@ -207,11 +207,11 @@ def mpso(jssp_problem, alg_params, particles, return_list):
 
 
 def parallel_mpso(jssp_problem, alg_params, particles):
-    n_cpus = multiprocessing.cpu_count()
+    n_jobs = min(multiprocessing.cpu_count(), int(alg_params.pop_size/2))
     manager = multiprocessing.Manager()
     return_list = manager.list()
     jobs = []
-    for i in range(n_cpus):
+    for i in range(n_jobs):
         p = multiprocessing.Process(target=mpso, args=(jssp_problem, alg_params, particles, return_list))
         jobs.append(p)
         p.start()
@@ -223,8 +223,8 @@ def parallel_mpso(jssp_problem, alg_params, particles):
 
 
 if __name__ == '__main__':
-    problem_1 = jssp_io.read_mpso_problem('test_data/3.txt')
-    algorithm_parameters = Parameters(max_iteration=500, pop_size=30,
+    problem_1 = jssp_io.read_mpso_problem('test_data/6.txt')
+    algorithm_parameters = Parameters(max_iteration=300, pop_size=30,
                                       max_omega=1.4, min_omega=0.4,
                                       prob_mie=0.01, prob_s=0.4,
                                       prob_i=0.4, prob_inv=0.1,
@@ -232,15 +232,16 @@ if __name__ == '__main__':
                                       v_max=problem_1.n * problem_1.m * 0.1)
     particles_p = []
     i = 0
-    while i < 1:
+    end = int(input('Rounds: '))
+    while i < end:
         print('Round {}: ---------------'.format(i))
         solutions = parallel_mpso(problem_1, algorithm_parameters, particles_p)
-
         particles_p = [Particle(problem_1, coord) for coord in solutions]
+        particles_p = [min(particles_p, key=lambda p: p.makespan)]
         i += 1
-        if i == 10:
+        if i == end:
             print('Continue?')
-            i = int(input('I: '))
+            end = int(input('End round: '))
 
     mpso_min = min(particles_p, key=lambda p: p.makespan)
     jssp_io.solution_plotter(mpso_min.solution)
