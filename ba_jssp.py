@@ -1,4 +1,4 @@
-import random, collections
+import random, collections, multiprocessing
 import jssp_io
 import numpy as np
 
@@ -29,6 +29,57 @@ class Patch(object):
     def makespan(self):
         return self._solution.makespan
 
+    def _swap(self):
+        mutated = np.copy(self._coordinates)
+        swap_positions = random.sample(range(len(self._coordinates)), 2)
+        p, q = swap_positions[0], swap_positions[1]
+        mutated[p], mutated[q] = mutated[q], mutated[p]
+        return mutated
+
+    def _insert(self):
+        mutated = np.copy(self._coordinates)
+        swap_positions = random.sample(range(len(self._coordinates)), 2)
+        p, q = swap_positions[0], swap_positions[1]
+        element = mutated[p]
+        mutated = np.append(mutated[:p], mutated[p+1:])
+        mutated = np.insert(mutated, q, element)
+        return mutated
+
+    def _inverse(self):
+        mutated = np.copy(self._coordinates)
+        swap_positions = sorted(random.sample(range(len(self._coordinates)), 2))
+        p, q = swap_positions[0], swap_positions[1]
+        segment = mutated[p:q+1]
+        segment = segment[::-1]
+        mutated = np.append(np.append(mutated[:p], segment), mutated[q+1:])
+        return mutated
+
+    def _long(self):
+        mutated = np.copy(self._coordinates)
+        swap_positions = sorted(random.sample(range(len(self._coordinates)), 3))
+        if random.random() <= 0.5:
+            p, q, r = swap_positions[0], swap_positions[1], swap_positions[2]
+        else:
+            r, p, q = swap_positions[0], swap_positions[1], swap_positions[2]
+        segment = mutated[p:q+1]
+        mutated = np.append(mutated[:p], mutated[q+1:])
+        mutated = np.append(np.append(mutated[:r], segment), mutated[r:])
+        return mutated
+
+    def _mutate_local(self):
+        prob_s = 0.4
+        prob_i = 0.4
+        prob_inv = 0.1
+        q = random.random()
+        if 0 <= q <= prob_s:
+            return self._swap()
+        elif prob_s < q <= prob_s + prob_i:
+            return self._insert()
+        elif prob_s + prob_i < q <= prob_s + prob_i + prob_inv:
+            return self._inverse()
+        else:
+            return self._long()
+
     def _random_local(self):
         rand = np.copy(self._coordinates)
         for i in range(len(rand)):
@@ -50,7 +101,10 @@ class Patch(object):
     def local_search(self, n_bees):
         search_results = []
         for i in range(n_bees):
-            search_coord = self._random_local()
+            if random.random() < 0.8:
+                search_coord = self._random_local()
+            else:
+                search_coord = self._mutate_local()
             search_results.append((search_coord, Solution(self._problem, search_coord)))
         search_results.sort(key=lambda r: r[1].makespan)
         if search_results[0][1].makespan < self._solution.makespan:
@@ -122,7 +176,7 @@ class Problem(object):
         return self._jobs
 
 
-def bees_algorithms(jssp_problem, alg_params, points, return_list):
+def bees_algorithm(jssp_problem, alg_params, points, return_list):
     # Initialize patches
     flower_patches = []
     for point in points:
@@ -138,16 +192,16 @@ def bees_algorithms(jssp_problem, alg_params, points, return_list):
     global_best_val = flower_patches[0].makespan
     # Run search
     for _ in range(alg_params.max_iteration):
-        for i in range(alg_params.ns):
+        for i in range(len(flower_patches)):
             n_bees = 1
             if i < alg_params.ne:
                 n_bees = alg_params.nre
             elif i < alg_params.nb:
                 n_bees = alg_params.nrb
             if n_bees > 1:
-                flower_patches[i] = flower_patches[i].local_search(n_bees)
+                flower_patches[i].local_search(n_bees)
             else:
-                flower_patches[i] = flower_patches[i].global_search()
+                flower_patches[i].global_search()
         flower_patches.sort(key=lambda p: p.makespan)
         if flower_patches[0].makespan < global_best_val:
             global_best = flower_patches[0].coordinates
@@ -156,13 +210,42 @@ def bees_algorithms(jssp_problem, alg_params, points, return_list):
     return_list.append(global_best)
 
 
+def parallel_ba(jssp_problem, alg_params, points):
+    n_jobs = min(multiprocessing.cpu_count(), int(alg_params.ns/2))
+    manager = multiprocessing.Manager()
+    return_list = manager.list()
+    jobs = []
+    for i in range(n_jobs):
+        p = multiprocessing.Process(target=bees_algorithm, args=(jssp_problem, alg_params, points, return_list))
+        jobs.append(p)
+        p.start()
+
+    for proc in jobs:
+        proc.join()
+
+    return return_list
+
+
 if __name__ == '__main__':
-    problem_1 = jssp_io.read_mpso_problem('test_data/1.txt')
-    algorithm_parameters = Parameters(max_iteration=500,
-                                      ns=50, ne=3, nb=10,
-                                      nre=7, nrb=3,
-                                      init_hyperbox=2,
-                                      shrink=0.8, stlim=10)
-    ret_list = []
-    bees_algorithms(problem_1, algorithm_parameters, [], ret_list)
-    jssp_io.solution_plotter(Solution(problem_1, ret_list[0]))
+    fname = '6.txt'
+    problem_1 = jssp_io.read_mpso_problem('test_data/'+fname)
+    dim = problem_1.n * problem_1.m
+    algorithm_parameters = Parameters(max_iteration=100,
+                                      ns=200, ne=3, nb=10,
+                                      nre=dim, nrb=int(dim/4),
+                                      init_hyperbox=3,
+                                      shrink=0.80, stlim=15)
+    solutions = []
+    i = 0
+    end = int(input('Rounds: '))
+    while i < end:
+        print('Round {}: ---------------'.format(i))
+        solutions = parallel_ba(problem_1, algorithm_parameters, solutions)
+        i += 1
+        if i == end:
+            print('Continue?')
+            end = int(input('End round: '))
+
+    solutions = [Solution(problem_1, coordinates) for coordinates in solutions]
+    ba_min = min(solutions, key=lambda p: p.makespan)
+    jssp_io.solution_plotter(ba_min, fname)

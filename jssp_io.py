@@ -22,7 +22,7 @@ def read_mpso_problem(filename):
     return Problem(n, m, jobs)
 
 
-def solution_plotter(solution):
+def solution_plotter(solution, fname):
     cm = plt.get_cmap('gist_rainbow')
     cNorm = colors.Normalize(vmin=0, vmax=solution.problem.n - 1)
     scalarMap = mplcm.ScalarMappable(norm=cNorm, cmap=cm)
@@ -51,9 +51,11 @@ def solution_plotter(solution):
 
     locsy, labelsy = plt.yticks(pos, ylabels)
     plt.setp(labelsy, fontsize=14)
-    ax.axis('tight')
+    #ax.axis('tight')
     ax.set_ylim(ymin=-0.1, ymax=ilen * 0.5 + 0.5)
     ax.grid(color='g', linestyle=':')
     ax.invert_yaxis()
+    plt.xlabel('Time')
+    plt.title(fname)
     plt.savefig('gantt.svg')
     plt.show()

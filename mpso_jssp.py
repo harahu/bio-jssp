@@ -223,7 +223,8 @@ def parallel_mpso(jssp_problem, alg_params, particles):
 
 
 if __name__ == '__main__':
-    problem_1 = jssp_io.read_mpso_problem('test_data/1.txt')
+    fname='3.txt'
+    problem_1 = jssp_io.read_mpso_problem('test_data/'+fname)
     algorithm_parameters = Parameters(max_iteration=300, pop_size=30,
                                       max_omega=1.4, min_omega=0.4,
                                       prob_mie=0.01, prob_s=0.4,
@@ -244,4 +245,4 @@ if __name__ == '__main__':
             end = int(input('End round: '))
 
     mpso_min = min(particles_p, key=lambda p: p.makespan)
-    jssp_io.solution_plotter(mpso_min.solution)
+    jssp_io.solution_plotter(mpso_min.solution, fname)
