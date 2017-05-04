@@ -216,6 +216,8 @@ def HACO(problem_spec, nodes, jobs, machines, target, return_list, generations =
     best = []
     best_makespan = 10000000000
     for g in range(generations):
+        if g % 10 == 0:
+            print("Generation"+str(g))
         routes = HACO_Single(nodes, ants)
         
         for i in range(len(routes)):
@@ -232,7 +234,6 @@ def HACO(problem_spec, nodes, jobs, machines, target, return_list, generations =
             if makespan < best_makespan:
                 best_makespan = makespan
                 best = routes[i][1]
-                print("Best: " + str(best_makespan))
         
         for node in nodes:
             for key in node.trail:

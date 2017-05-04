@@ -56,6 +56,6 @@ def solution_plotter(solution, fname):
     ax.grid(color='g', linestyle=':')
     ax.invert_yaxis()
     plt.xlabel('Time')
-    plt.title(fname)
+    plt.title(fname+''+' Makespan: '+str(solution.makespan))
     plt.savefig('gantt.svg')
     plt.show()
