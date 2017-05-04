@@ -227,7 +227,7 @@ def parallel_ba(jssp_problem, alg_params, points):
 
 
 if __name__ == '__main__':
-    fname = '6.txt'
+    fname = '3.txt'
     problem_1 = jssp_io.read_mpso_problem('test_data/'+fname)
     dim = problem_1.n * problem_1.m
     algorithm_parameters = Parameters(max_iteration=100,
