@@ -207,7 +207,7 @@ def local_search(route, prob_s, prob_i, prob_inv, local_search_size, problem_spe
     return search_space[0][0], decoded
 
 
-def HACO(problem_spec, nodes, jobs, machines, target, return_list, generations = 250, evaporation = 0.01, trail_constant = 10.0, local_search_size = 200):
+def HACO(problem_spec, nodes, jobs, machines, target, return_list, generations = 100, evaporation = 0.01, trail_constant = 10.0, local_search_size = 200):
     ants = max(10, machines // 10)
     prob_s=0.4
     prob_i=0.4
@@ -220,7 +220,11 @@ def HACO(problem_spec, nodes, jobs, machines, target, return_list, generations =
         
         for i in range(len(routes)):
             makespan, improved = local_search(routes[i], prob_s, prob_i, prob_inv, local_search_size, problem_spec)
-            for j in range(max(2, 25-g)):
+            if g in [0, 1, 2, 3]:
+                sd = 30
+            else:
+                sd = 1
+            for j in range(sd):
                 makespan, improved = local_search(improved, prob_s, prob_i, prob_inv, local_search_size, problem_spec)
             
             routes[i] = (makespan, improved)
@@ -228,6 +232,7 @@ def HACO(problem_spec, nodes, jobs, machines, target, return_list, generations =
             if makespan < best_makespan:
                 best_makespan = makespan
                 best = routes[i][1]
+                print("Best: " + str(best_makespan))
         
         for node in nodes:
             for key in node.trail:
@@ -245,8 +250,7 @@ def HACO(problem_spec, nodes, jobs, machines, target, return_list, generations =
                 nodes[start].trail[end] = t_start_end
                 
         routes = [route[1] for route in routes]
-                
-        print("Best: " + str(best_makespan))
+
         if best_makespan <= target: break
         
         # for node in nodes: print(node.trail)
@@ -271,8 +275,8 @@ def parallel_HACO(prob, nodes, jobs, machines, target):
     return return_list
        
 if __name__ == "__main__":
-    filename = "./test_data/" + argv[1] + ".txt"
-    target = int(argv[2])
+    filename = "./test_data/" + str(6) + ".txt"
+    target = int(1000)
     prob = jssp_io.read_mpso_problem(filename)
     
     jobs = prob.n
